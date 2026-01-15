@@ -1,0 +1,6 @@
+# git-cloud meta
+.git-remote
+
+# OS
+.DS_Store
+Thumbs.db
