@@ -7,7 +7,7 @@ set -e
 GIT_DIRS="${GIT_DIRS:-$HOME/.git-dirs}"
 CLOUD_DIRS="${CLOUD_DIRS:-$HOME/GoogleDrive:$HOME/Dropbox:$HOME/OneDrive}"
 REMOTE_FILE=".git-remote"
-VERSION="1.0.0"
+VERSION="1.1.0"
 
 # Colors
 red()    { echo -e "\033[0;31m$1\033[0m"; }
@@ -137,7 +137,7 @@ cmd_setup() {
                 green "Already set up: $existing_dir"
                 return 0
             fi
-            yellow "Found broken pointer, will fix..."
+            green "Pointer from another machine detected, configuring for this machine..."
         fi
     fi
 
@@ -184,6 +184,20 @@ cmd_setup() {
     fi
 
     git -C "$repo_path" reset HEAD -- . 2>/dev/null || true
+
+    # Fix executable permissions lost by cloud sync
+    local mode_changes=$(git -C "$repo_path" diff --summary 2>/dev/null | grep "mode change 100755 => 100644" || true)
+    if [ -n "$mode_changes" ]; then
+        echo ""
+        blue "Fixing executable permissions lost by cloud sync..."
+        while IFS= read -r line; do
+            local file=$(echo "$line" | sed 's/.*mode change 100755 => 100644 //')
+            if [ -n "$file" ] && [ -f "$repo_path/$file" ]; then
+                chmod +x "$repo_path/$file"
+                echo "  chmod +x $file"
+            fi
+        done <<< "$mode_changes"
+    fi
 
     echo ""
     green "Done!"
