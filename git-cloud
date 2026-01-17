@@ -7,7 +7,7 @@ set -e
 GIT_DIRS="${GIT_DIRS:-$HOME/.git-dirs}"
 CLOUD_DIRS="${CLOUD_DIRS:-$HOME/GoogleDrive:$HOME/Dropbox:$HOME/OneDrive}"
 REMOTE_FILE=".git-remote"
-VERSION="1.2.1"
+VERSION="1.2.2"
 
 # Colors
 red()    { echo -e "\033[0;31m$1\033[0m"; }
@@ -166,6 +166,10 @@ cmd_setup() {
     # Configure remote tracking (bare clone doesn't set this up)
     git --git-dir="$git_dir" config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
     git --git-dir="$git_dir" fetch origin 2>/dev/null || true
+
+    # Set up branch tracking
+    local default_branch=$(git --git-dir="$git_dir" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main")
+    git --git-dir="$git_dir" branch --set-upstream-to="origin/$default_branch" "$default_branch" 2>/dev/null || true
 
     # Create .git pointer file
     echo "gitdir: $git_dir" > "$repo_path/.git"
@@ -356,6 +360,12 @@ cmd_sync() {
     if [ -z "$current_fetch" ] || [[ "$current_fetch" != *"refs/remotes/origin"* ]]; then
         blue "Configuring remote tracking..."
         git -C "$repo_path" config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+    fi
+
+    # Ensure branch tracking is configured
+    local upstream=$(git -C "$repo_path" config --get branch."$branch".remote 2>/dev/null || true)
+    if [ -z "$upstream" ]; then
+        git -C "$repo_path" branch --set-upstream-to="origin/$branch" "$branch" 2>/dev/null || true
     fi
 
     # Fetch latest from remote
