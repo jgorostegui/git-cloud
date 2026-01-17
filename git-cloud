@@ -7,7 +7,7 @@ set -e
 GIT_DIRS="${GIT_DIRS:-$HOME/.git-dirs}"
 CLOUD_DIRS="${CLOUD_DIRS:-$HOME/GoogleDrive:$HOME/Dropbox:$HOME/OneDrive}"
 REMOTE_FILE=".git-remote"
-VERSION="1.1.0"
+VERSION="1.2.0"
 
 # Colors
 red()    { echo -e "\033[0;31m$1\033[0m"; }
@@ -320,6 +320,85 @@ cmd_status() {
     fi
 }
 
+# Sync local git with remote (after cloud sync brings new files)
+cmd_sync() {
+    local repo_path="${1:-.}"
+    repo_path="$(cd "$repo_path" 2>/dev/null && pwd)" || {
+        red "Error: Directory does not exist"
+        return 1
+    }
+
+    # Check if it's a git repo
+    if ! git -C "$repo_path" rev-parse --git-dir >/dev/null 2>&1; then
+        red "Error: Not a git repository"
+        echo "Run 'git-cloud setup' first"
+        return 1
+    fi
+
+    local branch=$(git -C "$repo_path" branch --show-current 2>/dev/null)
+    if [ -z "$branch" ]; then
+        branch="main"
+    fi
+
+    local remote="origin"
+
+    blue "Syncing with remote..."
+    echo "  Branch: $branch"
+    echo "  Remote: $remote"
+    echo ""
+
+    # Fetch latest from remote
+    echo "Fetching from $remote..."
+    git -C "$repo_path" fetch "$remote" || {
+        red "Fetch failed"
+        return 1
+    }
+
+    # Check if remote branch exists
+    if ! git -C "$repo_path" rev-parse "$remote/$branch" >/dev/null 2>&1; then
+        red "Error: Remote branch $remote/$branch not found"
+        return 1
+    fi
+
+    # Show what will change
+    local local_head=$(git -C "$repo_path" rev-parse HEAD 2>/dev/null)
+    local remote_head=$(git -C "$repo_path" rev-parse "$remote/$branch" 2>/dev/null)
+
+    if [ "$local_head" = "$remote_head" ]; then
+        green "Already in sync with $remote/$branch"
+        git -C "$repo_path" status --short --branch
+        return 0
+    fi
+
+    local commits_behind=$(git -C "$repo_path" rev-list --count HEAD.."$remote/$branch" 2>/dev/null || echo "0")
+    local commits_ahead=$(git -C "$repo_path" rev-list --count "$remote/$branch"..HEAD 2>/dev/null || echo "0")
+
+    echo "Local is $commits_behind commit(s) behind, $commits_ahead commit(s) ahead"
+
+    # Reset to remote
+    echo ""
+    yellow "Resetting to $remote/$branch..."
+    git -C "$repo_path" reset --hard "$remote/$branch"
+
+    # Fix executable permissions lost by cloud sync
+    local mode_changes=$(git -C "$repo_path" diff --summary 2>/dev/null | grep "mode change 100755 => 100644" || true)
+    if [ -n "$mode_changes" ]; then
+        echo ""
+        blue "Fixing executable permissions lost by cloud sync..."
+        while IFS= read -r line; do
+            local file=$(echo "$line" | sed 's/.*mode change 100755 => 100644 //')
+            if [ -n "$file" ] && [ -f "$repo_path/$file" ]; then
+                chmod +x "$repo_path/$file"
+                echo "  chmod +x $file"
+            fi
+        done <<< "$mode_changes"
+    fi
+
+    echo ""
+    green "Done!"
+    git -C "$repo_path" status --short --branch
+}
+
 cmd_version() {
     echo "git-cloud $VERSION"
 }
@@ -339,6 +418,7 @@ SETUP (once per machine):
 COMMANDS:
   git-cloud clone <url> [path]   Clone repo with .git stored locally
   git-cloud setup [url] [path]   Setup git for synced folder
+  git-cloud sync [path]          Sync local git with remote after cloud sync
   git-cloud migrate [path]       Move existing .git to local storage
   git-cloud status               Show all repos and their state
   git-cloud version              Show version
@@ -364,6 +444,7 @@ EOF
 case "${1:-}" in
     clone)      cmd_clone "$2" "$3" ;;
     setup)      cmd_setup "$2" "$3" ;;
+    sync)       cmd_sync "$2" ;;
     migrate)    cmd_migrate "$2" ;;
     status|st)  cmd_status ;;
     version|-v|--version) cmd_version ;;
