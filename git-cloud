@@ -7,7 +7,7 @@ set -e
 GIT_DIRS="${GIT_DIRS:-$HOME/.git-dirs}"
 CLOUD_DIRS="${CLOUD_DIRS:-$HOME/GoogleDrive:$HOME/Dropbox:$HOME/OneDrive}"
 REMOTE_FILE=".git-remote"
-VERSION="1.2.2"
+VERSION="1.3.0"
 
 # Colors
 red()    { echo -e "\033[0;31m$1\033[0m"; }
@@ -28,7 +28,7 @@ each_cloud_dir() {
 get_git_dir() {
     local repo_path="$1"
     # Remove $HOME prefix, keep the rest of the structure
-    local relative="${repo_path#$HOME/}"
+    local relative="${repo_path#"$HOME"/}"
     echo "$GIT_DIRS/$relative"
 }
 
@@ -57,7 +57,8 @@ cmd_clone() {
         return 1
     fi
 
-    local git_dir=$(get_git_dir "$dest")
+    local git_dir
+    git_dir=$(get_git_dir "$dest")
 
     if [ -e "$git_dir" ]; then
         red "Error: Git dir already exists: $git_dir"
@@ -130,7 +131,8 @@ cmd_setup() {
     fi
 
     if [ -f "$repo_path/.git" ]; then
-        local pointer="$(cat "$repo_path/.git")"
+        local pointer
+        pointer="$(cat "$repo_path/.git")"
         if [[ "$pointer" == gitdir:* ]]; then
             local existing_dir="${pointer#gitdir: }"
             if [ -d "$existing_dir" ]; then
@@ -141,7 +143,8 @@ cmd_setup() {
         fi
     fi
 
-    local git_dir=$(get_git_dir "$repo_path")
+    local git_dir
+    git_dir=$(get_git_dir "$repo_path")
 
     mkdir -p "$(dirname "$git_dir")"
 
@@ -168,7 +171,8 @@ cmd_setup() {
     git --git-dir="$git_dir" fetch origin 2>/dev/null || true
 
     # Set up branch tracking
-    local default_branch=$(git --git-dir="$git_dir" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main")
+    local default_branch
+    default_branch=$(git --git-dir="$git_dir" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main")
     git --git-dir="$git_dir" branch --set-upstream-to="origin/$default_branch" "$default_branch" 2>/dev/null || true
 
     # Create .git pointer file
@@ -184,7 +188,8 @@ cmd_setup() {
     yellow "Aligning tracked files with HEAD from remote..."
     yellow "(Untracked files like .env are not affected)"
 
-    local changes=$(git -C "$repo_path" status --porcelain 2>/dev/null | grep -v "^??" | wc -l)
+    local changes
+    changes=$(git -C "$repo_path" status --porcelain 2>/dev/null | grep -vc "^??" || echo "0")
     if [ "$changes" -gt 0 ]; then
         yellow "Found $changes tracked file(s) differing from remote:"
         git -C "$repo_path" status --short 2>/dev/null | grep -v "^??" | head -10
@@ -194,12 +199,14 @@ cmd_setup() {
     git -C "$repo_path" reset HEAD -- . 2>/dev/null || true
 
     # Fix executable permissions lost by cloud sync
-    local mode_changes=$(git -C "$repo_path" diff --summary 2>/dev/null | grep "mode change 100755 => 100644" || true)
+    local mode_changes
+    mode_changes=$(git -C "$repo_path" diff --summary 2>/dev/null | grep "mode change 100755 => 100644" || true)
     if [ -n "$mode_changes" ]; then
         echo ""
         blue "Fixing executable permissions lost by cloud sync..."
         while IFS= read -r line; do
-            local file=$(echo "$line" | sed 's/.*mode change 100755 => 100644 //')
+            local file
+            file="${line##*mode change 100755 => 100644 }"
             if [ -n "$file" ] && [ -f "$repo_path/$file" ]; then
                 chmod +x "$repo_path/$file"
                 echo "  chmod +x $file"
@@ -227,7 +234,8 @@ cmd_migrate() {
         return 1
     fi
 
-    local git_dir=$(get_git_dir "$repo_path")
+    local git_dir
+    git_dir=$(get_git_dir "$repo_path")
 
     if [ -e "$git_dir" ]; then
         red "Error: Git dir already exists: $git_dir"
@@ -235,7 +243,8 @@ cmd_migrate() {
     fi
 
     # Get remote URL before moving
-    local url=$(git -C "$repo_path" remote get-url origin 2>/dev/null || true)
+    local url
+    url=$(git -C "$repo_path" remote get-url origin 2>/dev/null || true)
 
     blue "Migrating..."
     echo "  From: $repo_path/.git"
@@ -277,8 +286,9 @@ cmd_status() {
         while IFS= read -r item; do
             [ -e "$item" ] || continue
 
-            local repo_path="$(dirname "$item")"
-            local name="${repo_path#$cloud_dir/}"
+            local repo_path
+            repo_path="$(dirname "$item")"
+            local name="${repo_path#"$cloud_dir"/}"
 
             if [ $has_repos -eq 0 ]; then
                 blue "=== $cloud_dir ==="
@@ -289,7 +299,8 @@ cmd_status() {
                 yellow "! $name"
                 echo "   .git is directory (run: git-cloud migrate \"$repo_path\")"
             elif [ -f "$item" ]; then
-                local pointer="$(cat "$item")"
+                local pointer
+                pointer="$(cat "$item")"
                 if [[ "$pointer" == gitdir:* ]]; then
                     local git_dir="${pointer#gitdir: }"
                     if [ -d "$git_dir" ]; then
@@ -314,9 +325,10 @@ cmd_status() {
     # Check for folders with .git-remote but no .git
     while IFS= read -r cloud_dir; do
         while IFS= read -r remote_file; do
-            local repo_path="$(dirname "$remote_file")"
+            local repo_path
+            repo_path="$(dirname "$remote_file")"
             if [ ! -e "$repo_path/.git" ]; then
-                yellow "? ${repo_path#$cloud_dir/}"
+                yellow "? ${repo_path#"$cloud_dir"/}"
                 echo "   Has $REMOTE_FILE but no .git (run: cd \"$repo_path\" && git-cloud setup)"
                 ((found++)) || true
             fi
@@ -343,7 +355,8 @@ cmd_sync() {
         return 1
     fi
 
-    local branch=$(git -C "$repo_path" branch --show-current 2>/dev/null)
+    local branch
+    branch=$(git -C "$repo_path" branch --show-current 2>/dev/null)
     if [ -z "$branch" ]; then
         branch="main"
     fi
@@ -356,14 +369,16 @@ cmd_sync() {
     echo ""
 
     # Ensure remote tracking is configured (may be missing from old setups)
-    local current_fetch=$(git -C "$repo_path" config --get remote.origin.fetch 2>/dev/null || true)
+    local current_fetch
+    current_fetch=$(git -C "$repo_path" config --get remote.origin.fetch 2>/dev/null || true)
     if [ -z "$current_fetch" ] || [[ "$current_fetch" != *"refs/remotes/origin"* ]]; then
         blue "Configuring remote tracking..."
         git -C "$repo_path" config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
     fi
 
     # Ensure branch tracking is configured
-    local upstream=$(git -C "$repo_path" config --get branch."$branch".remote 2>/dev/null || true)
+    local upstream
+    upstream=$(git -C "$repo_path" config --get branch."$branch".remote 2>/dev/null || true)
     if [ -z "$upstream" ]; then
         git -C "$repo_path" branch --set-upstream-to="origin/$branch" "$branch" 2>/dev/null || true
     fi
@@ -384,8 +399,10 @@ cmd_sync() {
     fi
 
     # Show what will change
-    local local_head=$(git -C "$repo_path" rev-parse HEAD 2>/dev/null)
-    local remote_head=$(git -C "$repo_path" rev-parse "$remote/$branch" 2>/dev/null)
+    local local_head
+    local_head=$(git -C "$repo_path" rev-parse HEAD 2>/dev/null)
+    local remote_head
+    remote_head=$(git -C "$repo_path" rev-parse "$remote/$branch" 2>/dev/null)
 
     if [ "$local_head" = "$remote_head" ]; then
         green "Already in sync with $remote/$branch"
@@ -393,8 +410,10 @@ cmd_sync() {
         return 0
     fi
 
-    local commits_behind=$(git -C "$repo_path" rev-list --count HEAD.."$remote/$branch" 2>/dev/null || echo "0")
-    local commits_ahead=$(git -C "$repo_path" rev-list --count "$remote/$branch"..HEAD 2>/dev/null || echo "0")
+    local commits_behind
+    commits_behind=$(git -C "$repo_path" rev-list --count HEAD.."$remote/$branch" 2>/dev/null || echo "0")
+    local commits_ahead
+    commits_ahead=$(git -C "$repo_path" rev-list --count "$remote/$branch"..HEAD 2>/dev/null || echo "0")
 
     echo "Local is $commits_behind commit(s) behind, $commits_ahead commit(s) ahead"
 
@@ -404,12 +423,14 @@ cmd_sync() {
     git -C "$repo_path" reset --hard "$remote/$branch"
 
     # Fix executable permissions lost by cloud sync
-    local mode_changes=$(git -C "$repo_path" diff --summary 2>/dev/null | grep "mode change 100755 => 100644" || true)
+    local mode_changes
+    mode_changes=$(git -C "$repo_path" diff --summary 2>/dev/null | grep "mode change 100755 => 100644" || true)
     if [ -n "$mode_changes" ]; then
         echo ""
         blue "Fixing executable permissions lost by cloud sync..."
         while IFS= read -r line; do
-            local file=$(echo "$line" | sed 's/.*mode change 100755 => 100644 //')
+            local file
+            file="${line##*mode change 100755 => 100644 }"
             if [ -n "$file" ] && [ -f "$repo_path/$file" ]; then
                 chmod +x "$repo_path/$file"
                 echo "  chmod +x $file"

@@ -17,10 +17,10 @@ ask() {
     local default="${2:-n}"
     local yn
     if [ "$default" = "y" ]; then
-        read -p "$prompt [Y/n] " yn
+        read -r -p "$prompt [Y/n] " yn
         yn="${yn:-y}"
     else
-        read -p "$prompt [y/N] " yn
+        read -r -p "$prompt [y/N] " yn
         yn="${yn:-n}"
     fi
     [[ "$yn" =~ ^[Yy]$ ]]
@@ -68,9 +68,12 @@ SHELL_RC=$(detect_shell_rc)
 # 2. PATH (only if needed)
 if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
     if ask "Add $INSTALL_DIR to PATH in $SHELL_RC?"; then
-        echo '' >> "$SHELL_RC"
-        echo '# git-cloud: PATH' >> "$SHELL_RC"
-        echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$SHELL_RC"
+        {
+            echo ''
+            echo '# git-cloud: PATH'
+            # shellcheck disable=SC2016
+            echo 'export PATH="$HOME/.local/bin:$PATH"'
+        } >> "$SHELL_RC"
         green "✓ Added PATH to $SHELL_RC"
     else
         yellow "⚠ Skipped. Add manually: export PATH=\"\$HOME/.local/bin:\$PATH\""
