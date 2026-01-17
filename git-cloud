@@ -7,7 +7,7 @@ set -e
 GIT_DIRS="${GIT_DIRS:-$HOME/.git-dirs}"
 CLOUD_DIRS="${CLOUD_DIRS:-$HOME/GoogleDrive:$HOME/Dropbox:$HOME/OneDrive}"
 REMOTE_FILE=".git-remote"
-VERSION="1.2.0"
+VERSION="1.2.1"
 
 # Colors
 red()    { echo -e "\033[0;31m$1\033[0m"; }
@@ -162,6 +162,10 @@ cmd_setup() {
     # Configure for working tree
     git --git-dir="$git_dir" config --unset core.bare
     git --git-dir="$git_dir" config core.worktree "$repo_path"
+
+    # Configure remote tracking (bare clone doesn't set this up)
+    git --git-dir="$git_dir" config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+    git --git-dir="$git_dir" fetch origin 2>/dev/null || true
 
     # Create .git pointer file
     echo "gitdir: $git_dir" > "$repo_path/.git"
@@ -347,6 +351,13 @@ cmd_sync() {
     echo "  Remote: $remote"
     echo ""
 
+    # Ensure remote tracking is configured (may be missing from old setups)
+    local current_fetch=$(git -C "$repo_path" config --get remote.origin.fetch 2>/dev/null || true)
+    if [ -z "$current_fetch" ] || [[ "$current_fetch" != *"refs/remotes/origin"* ]]; then
+        blue "Configuring remote tracking..."
+        git -C "$repo_path" config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+    fi
+
     # Fetch latest from remote
     echo "Fetching from $remote..."
     git -C "$repo_path" fetch "$remote" || {
@@ -357,6 +368,8 @@ cmd_sync() {
     # Check if remote branch exists
     if ! git -C "$repo_path" rev-parse "$remote/$branch" >/dev/null 2>&1; then
         red "Error: Remote branch $remote/$branch not found"
+        echo "Available remote branches:"
+        git -C "$repo_path" branch -r 2>/dev/null || echo "  (none)"
         return 1
     fi
 
