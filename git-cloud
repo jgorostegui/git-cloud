@@ -7,7 +7,7 @@ set -e
 GIT_DIRS="${GIT_DIRS:-$HOME/.git-dirs}"
 CLOUD_DIRS="${CLOUD_DIRS:-$HOME/GoogleDrive:$HOME/Dropbox:$HOME/OneDrive}"
 REMOTE_FILE=".git-remote"
-VERSION="1.3.0"
+VERSION="1.4.0"
 
 # Colors
 red()    { echo -e "\033[0;31m$1\033[0m"; }
@@ -84,6 +84,47 @@ cmd_clone() {
     echo ""
     echo "Created $REMOTE_FILE with remote URL."
     echo "Tip: Add '$REMOTE_FILE' to your global .gitignore"
+}
+
+# Init new repo with separate git dir
+cmd_init() {
+    local repo_path="${1:-.}"
+
+    # Resolve to absolute path (create if needed)
+    if [ ! -d "$repo_path" ]; then
+        mkdir -p "$repo_path"
+    fi
+    repo_path="$(cd "$repo_path" && pwd)"
+
+    # Check if already a git repo
+    if [ -d "$repo_path/.git" ] || [ -f "$repo_path/.git" ]; then
+        red "Error: Already a git repository"
+        echo "Use 'git-cloud migrate' to move .git to local storage"
+        return 1
+    fi
+
+    local git_dir
+    git_dir=$(get_git_dir "$repo_path")
+
+    if [ -e "$git_dir" ]; then
+        red "Error: Git dir already exists: $git_dir"
+        echo "Remove it first: rm -rf \"$git_dir\""
+        return 1
+    fi
+
+    mkdir -p "$(dirname "$git_dir")"
+
+    blue "Initializing with separate git dir..."
+    echo "  Working tree: $repo_path"
+    echo "  Git dir: $git_dir"
+    echo ""
+
+    git init --separate-git-dir="$git_dir" "$repo_path"
+
+    echo ""
+    green "Done!"
+    echo ""
+    echo "Next: add a remote with 'git remote add origin <url>'"
 }
 
 # Setup git for a folder that was synced (no .git yet)
@@ -461,6 +502,7 @@ SETUP (once per machine):
 
 COMMANDS:
   git-cloud clone <url> [path]   Clone repo with .git stored locally
+  git-cloud init [path]          Init new repo with .git stored locally
   git-cloud setup [url] [path]   Setup git for synced folder
   git-cloud sync [path]          Sync local git with remote after cloud sync
   git-cloud migrate [path]       Move existing .git to local storage
@@ -487,6 +529,7 @@ EOF
 # Main
 case "${1:-}" in
     clone)      cmd_clone "$2" "$3" ;;
+    init)       cmd_init "$2" ;;
     setup)      cmd_setup "$2" "$3" ;;
     sync)       cmd_sync "$2" ;;
     migrate)    cmd_migrate "$2" ;;

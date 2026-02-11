@@ -92,7 +92,7 @@ if ! grep -q '_git_cloud()' "$SHELL_RC" 2>/dev/null; then
 _git_cloud() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
     if [ "$COMP_CWORD" -eq 1 ]; then
-        COMPREPLY=($(compgen -W "clone setup migrate status version help" -- "$cur"))
+        COMPREPLY=($(compgen -W "clone init setup sync migrate status version help" -- "$cur"))
     fi
 }
 complete -F _git_cloud git-cloud

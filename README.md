@@ -77,6 +77,21 @@ This:
 - Stores `.git` in `~/.git-dirs/GoogleDrive/dev/repo/`
 - Creates `.git-remote` with the URL (for other machines)
 
+### Init a new repo in cloud folder
+
+```bash
+cd ~/GoogleDrive/dev/new-project
+git-cloud init
+```
+
+Or with a path:
+
+```bash
+git-cloud init ~/GoogleDrive/dev/new-project
+```
+
+This creates a new git repo with `.git` stored locally (no `git init` + `migrate` needed).
+
 ### Setup on another machine (after cloud sync)
 
 Files arrive via cloud sync, but no `.git` yet:
@@ -117,25 +132,25 @@ Shows:
 ┌─────────────────────────────────────────────────────────────────┐
 │ LAPTOP (first time)                                             │
 │                                                                 │
-│ $ git-cloud clone git@github.com:me/project ~/GDrive/project   │
+│ $ git-cloud clone git@github.com:me/project ~/GDrive/project    │
 │                                                                 │
-│ Cloud syncs: src/, .env, .git-remote                           │
-│ Local only: ~/.git-dirs/GDrive/project/                        │
+│ Cloud syncs: src/, .env, .git-remote                            │
+│ Local only: ~/.git-dirs/GDrive/project/                         │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼ (cloud sync)
 ┌─────────────────────────────────────────────────────────────────┐
 │ DESKTOP (after sync)                                            │
 │                                                                 │
-│ $ cd ~/GDrive/project                                          │
-│ ⚠ Run 'git-cloud setup' to enable git                          │
+│ $ cd ~/GDrive/project                                           │
+│ ⚠ Run 'git-cloud setup' to enable git                           │
 │                                                                 │
-│ $ git-cloud setup                                              │
-│ Reading URL from .git-remote...                                │
-│ Done!                                                          │
+│ $ git-cloud setup                                               │
+│ Reading URL from .git-remote...                                 │
+│ Done!                                                           │
 │                                                                 │
-│ $ git status                                                   │
-│ On branch main                                                 │
+│ $ git status                                                    │
+│ On branch main                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -144,7 +159,9 @@ Shows:
 | Command | Description |
 |---------|-------------|
 | `git-cloud clone <url> [path]` | Clone with local `.git` storage |
+| `git-cloud init [path]` | Init new repo with local `.git` storage |
 | `git-cloud setup [url] [path]` | Setup git for synced folder |
+| `git-cloud sync [path]` | Sync local git with remote after cloud sync |
 | `git-cloud migrate [path]` | Move existing `.git` to local storage |
 | `git-cloud status` | Show all repos and their state |
 | `git-cloud help` | Show help |
